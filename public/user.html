@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>End User | Feature Check</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+
+    <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+        <h1 class="text-2xl font-bold text-gray-800 mb-2 text-center">Check Feature Status</h1>
+        <p class="text-gray-500 text-sm mb-6 text-center">Enter your Organization ID and the Feature Key to see if it is active.</p>
+
+        <form id="checkFeatureForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Organization ID</label>
+                <input type="text" id="orgId" placeholder="e.g., 64abc123..." class="mt-1 block w-full p-2 border border-gray-300 rounded" required>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Feature Key</label>
+                <input type="text" id="featureKey" placeholder="e.g., dark_mode" class="mt-1 block w-full p-2 border border-gray-300 rounded" required>
+            </div>
+
+            <button type="submit" class="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 font-semibold">
+                Check Status
+            </button>
+        </form>
+
+        <div id="resultArea" class="mt-6 hidden">
+            <div class="p-4 rounded text-center font-bold text-lg" id="statusBox">
+                </div>
+            <p id="messageText" class="text-center text-sm mt-2 text-gray-600"></p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('checkFeatureForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const orgId = document.getElementById('orgId').value.trim();
+            const featureKey = document.getElementById('featureKey').value.trim();
+            const resultArea = document.getElementById('resultArea');
+            const statusBox = document.getElementById('statusBox');
+            const messageText = document.getElementById('messageText');
+
+            try {
+                // Call the public check API endpoint
+                const res = await fetch(`/api/flags/check?orgId=${orgId}&featureKey=${featureKey}`);
+                const data = await res.json();
+
+                resultArea.classList.remove('hidden');
+
+                if (res.ok) {
+                    if (data.isEnabled) {
+                        statusBox.textContent = 'FEATURE IS ENABLED';
+                        statusBox.className = 'p-4 rounded text-center font-bold text-lg bg-green-100 text-green-800';
+                        messageText.textContent = 'This feature is active for your organization.';
+                    } else {
+                        statusBox.textContent = 'FEATURE IS DISABLED';
+                        statusBox.className = 'p-4 rounded text-center font-bold text-lg bg-red-100 text-red-800';
+                        messageText.textContent = data.message || 'This feature is turned off for your organization.';
+                    }
+                } else {
+                    statusBox.textContent = 'ERROR';
+                    statusBox.className = 'p-4 rounded text-center font-bold text-lg bg-gray-200 text-gray-800';
+                    messageText.textContent = data.message || 'Something went wrong.';
+                }
+            } catch (err) {
+                console.error('Fetch error:', err);
+                alert('Failed to connect to the server.');
+            }
+        });
+    </script>
+</body>
+</html>

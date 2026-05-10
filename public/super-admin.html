@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin | Byepo Feature Flags</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-8">
+
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-800 mb-8">Super Admin Portal</h1>
+
+        <div id="loginSection" class="bg-white p-6 rounded-lg shadow-md mb-8 max-w-md">
+            <h2 class="text-xl font-semibold mb-4">System Login</h2>
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Email</label>
+                    <input type="email" id="email" class="mt-1 block w-full p-2 border border-gray-300 rounded" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Password</label>
+                    <input type="password" id="password" class="mt-1 block w-full p-2 border border-gray-300 rounded" required>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">Login</button>
+            </form>
+            <p id="loginMessage" class="mt-4 text-sm text-red-600 hidden"></p>
+        </div>
+
+        <div id="dashboardSection" class="hidden space-y-8">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-semibold text-gray-800">Organization Management</h2>
+                <button id="logoutBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Logout</button>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h3 class="text-lg font-medium mb-4">Create New Organization</h3>
+                <form id="createOrgForm" class="flex gap-4">
+                    <input type="text" id="orgName" placeholder="Organization Name" class="flex-1 p-2 border border-gray-300 rounded" required>
+                    <button type="submit" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700">Create</button>
+                </form>
+                <p id="orgMessage" class="mt-2 text-sm text-green-600 hidden"></p>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h3 class="text-lg font-medium mb-4">Existing Organizations</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-left">
+                        <thead>
+                            <tr class="bg-gray-50 border-b">
+                                <th class="p-3">Organization Name</th>
+                                <th class="p-3">Organization ID (Need this for Admin signup)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orgList" class="divide-y">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let token = localStorage.getItem('superAdminToken');
+
+        const loginSection = document.getElementById('loginSection');
+        const dashboardSection = document.getElementById('dashboardSection');
+        const loginForm = document.getElementById('loginForm');
+        const createOrgForm = document.getElementById('createOrgForm');
+        const orgList = document.getElementById('orgList');
+
+        if (token) {
+            showDashboard();
+            fetchOrganizations();
+        }
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await res.json();
+
+                if (res.ok && data.user.role === 'SUPER_ADMIN') {
+                    token = data.token;
+                    localStorage.setItem('superAdminToken', token);
+                    showDashboard();
+                    fetchOrganizations();
+                } else {
+                    document.getElementById('loginMessage').textContent = data.message || 'Access Denied';
+                    document.getElementById('loginMessage').classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        });
+
+        createOrgForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('orgName').value;
+
+            try {
+                const res = await fetch('/api/organizations', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ name })
+                });
+                
+                if (res.ok) {
+                    document.getElementById('orgName').value = '';
+                    fetchOrganizations();
+                    const msg = document.getElementById('orgMessage');
+                    msg.textContent = 'Organization created successfully!';
+                    msg.classList.remove('hidden');
+                    setTimeout(() => msg.classList.add('hidden'), 3000);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        });
+
+        async function fetchOrganizations() {
+            try {
+                const res = await fetch('/api/organizations', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const orgs = await res.json();
+                
+                orgList.innerHTML = orgs.map(org => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="p-3 font-medium text-gray-900">${org.name}</td>
+                        <td class="p-3 font-mono text-sm text-gray-500">${org._id}</td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('superAdminToken');
+            token = null;
+            loginSection.classList.remove('hidden');
+            dashboardSection.classList.add('hidden');
+        });
+
+        function showDashboard() {
+            loginSection.classList.add('hidden');
+            dashboardSection.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
