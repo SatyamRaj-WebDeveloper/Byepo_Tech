@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Org Admin | Byepo Feature Flags</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-4xl">
+        <h1 class="text-3xl font-bold text-gray-800 mb-8 text-center">Organization Admin Portal</h1>
+
+        <div id="authSection" class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4">Login</h2>
+                <form id="loginForm" class="space-y-4">
+                    <input type="email" id="loginEmail" placeholder="Email" class="w-full p-2 border border-gray-300 rounded" required>
+                    <input type="password" id="loginPassword" placeholder="Password" class="w-full p-2 border border-gray-300 rounded" required>
+                    <button type="submit" class="w-full bg-blue-600 text-white p-2 rounded hover:bg-blue-700">Login</button>
+                </form>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-xl font-semibold mb-4">Signup</h2>
+                <form id="signupForm" class="space-y-4">
+                    <input type="text" id="signupOrgId" placeholder="Organization ID (From Super Admin)" class="w-full p-2 border border-gray-300 rounded" required>
+                    <input type="email" id="signupEmail" placeholder="Email" class="w-full p-2 border border-gray-300 rounded" required>
+                    <input type="password" id="signupPassword" placeholder="Password" class="w-full p-2 border border-gray-300 rounded" required>
+                    <button type="submit" class="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700">Sign Up</button>
+                </form>
+            </div>
+        </div>
+        <p id="authMessage" class="text-center font-semibold text-red-600 hidden mb-4"></p>
+
+        <div id="dashboardSection" class="hidden space-y-8">
+            <div class="flex justify-between items-center">
+                <h2 class="text-2xl font-semibold text-gray-800">Feature Flag Management</h2>
+                <button id="logoutBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Logout</button>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h3 class="text-lg font-medium mb-4">Create Feature Flag</h3>
+                <form id="createFlagForm" class="flex gap-4">
+                    <input type="text" id="featureKey" placeholder="e.g., new_checkout_ui" class="flex-1 p-2 border border-gray-300 rounded" required>
+                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">Create Flag</button>
+                </form>
+            </div>
+
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h3 class="text-lg font-medium mb-4">Your Feature Flags</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-left">
+                        <thead>
+                            <tr class="bg-gray-50 border-b">
+                                <th class="p-3">Feature Key</th>
+                                <th class="p-3">Status</th>
+                                <th class="p-3">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="flagList" class="divide-y">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let token = localStorage.getItem('orgAdminToken');
+        
+        const authSection = document.getElementById('authSection');
+        const dashboardSection = document.getElementById('dashboardSection');
+        const authMessage = document.getElementById('authMessage');
+
+        if (token) {
+            showDashboard();
+            fetchFlags();
+        }
+
+        // --- AUTHENTICATION ---
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await handleAuth('/api/auth/login', {
+                email: document.getElementById('loginEmail').value,
+                password: document.getElementById('loginPassword').value
+            });
+        });
+
+        document.getElementById('signupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await handleAuth('/api/auth/signup', {
+                organizationId: document.getElementById('signupOrgId').value,
+                email: document.getElementById('signupEmail').value,
+                password: document.getElementById('signupPassword').value
+            });
+        });
+
+        async function handleAuth(endpoint, bodyData) {
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(bodyData)
+                });
+                const data = await res.json();
+
+                if (res.ok && data.user.role === 'ORG_ADMIN') {
+                    token = data.token;
+                    localStorage.setItem('orgAdminToken', token);
+                    authMessage.classList.add('hidden');
+                    showDashboard();
+                    fetchFlags();
+                } else {
+                    authMessage.textContent = data.message || 'Error occurred';
+                    authMessage.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // --- FLAG MANAGEMENT ---
+        document.getElementById('createFlagForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const featureKey = document.getElementById('featureKey').value;
+
+            try {
+                const res = await fetch('/api/flags', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ featureKey, isEnabled: false }) 
+                });
+                if (res.ok) {
+                    document.getElementById('featureKey').value = '';
+                    fetchFlags();
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        });
+
+        async function fetchFlags() {
+            try {
+                const res = await fetch('/api/flags', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const flags = await res.json();
+                
+                document.getElementById('flagList').innerHTML = flags.map(flag => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="p-3 font-medium font-mono text-gray-900">${flag.featureKey}</td>
+                        <td class="p-3">
+                            <span class="px-2 py-1 rounded text-sm font-semibold ${flag.isEnabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                ${flag.isEnabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                        </td>
+                        <td class="p-3">
+                            <button onclick="toggleFlag('${flag._id}', ${!flag.isEnabled})" class="bg-gray-200 px-3 py-1 rounded hover:bg-gray-300 text-sm">
+                                ${flag.isEnabled ? 'Disable' : 'Enable'}
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        window.toggleFlag = async (flagId, newState) => {
+            try {
+                const res = await fetch(`/api/flags/${flagId}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ isEnabled: newState })
+                });
+                if (res.ok) fetchFlags();
+            } catch (err) {
+                console.error(err);
+            }
+        };
+
+        // --- UTILS ---
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('orgAdminToken');
+            token = null;
+            authSection.classList.remove('hidden');
+            dashboardSection.classList.add('hidden');
+        });
+
+        function showDashboard() {
+            authSection.classList.add('hidden');
+            dashboardSection.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
